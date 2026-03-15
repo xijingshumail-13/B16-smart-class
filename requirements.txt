@@ -2,3 +2,5 @@ pandas
 openpyxl
 pyinstaller
 fpdf
+pystray
+pillow
