@@ -1,6 +1,6 @@
 pandas
 openpyxl
-pyinstaller
 fpdf
 pystray
-pillow
+Pillow
+pyinstaller
