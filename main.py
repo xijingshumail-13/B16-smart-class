@@ -11,6 +11,7 @@ import os
 import sys
 import pystray
 from PIL import Image
+import json
 
 ROWS=5
 COLS=6
@@ -27,6 +28,7 @@ seat_file="seat_layout.xlsx"
 seat_names_file="seat_names.xlsx"
 duty_names_file="duty_names.xlsx"
 history_file="Duty_History.xlsx"
+fixed_file="fixed_duty.json"
 
 tasks=[
 "擦黑板",
@@ -36,7 +38,23 @@ tasks=[
 "组长，负责各种擦(doge)"
 ]
 
+fixed_duty={t:None for t in tasks}
+
 drag_data={"row":None,"col":None}
+
+# ----------------------
+# 读取固定值日
+# ----------------------
+
+def load_fixed_duty():
+    global fixed_duty
+    if os.path.exists(fixed_file):
+        with open(fixed_file,"r",encoding="utf-8") as f:
+            fixed_duty=json.load(f)
+
+def save_fixed_duty():
+    with open(fixed_file,"w",encoding="utf-8") as f:
+        json.dump(fixed_duty,f,ensure_ascii=False,indent=2)
 
 # ----------------------
 # 名单加载
@@ -237,35 +255,98 @@ def lock_seat():
     draw_seats()
 
 # ----------------------
-# 值日
+# 固定值日设置
+# ----------------------
+
+def set_fixed_duty():
+
+    if not duty_students:
+        messagebox.showwarning("提示","请先导入值日名单")
+        return
+
+    win=tk.Toplevel()
+    win.title("固定值日设置")
+
+    vars={}
+
+    for i,task in enumerate(tasks):
+
+        tk.Label(win,text=task,width=18,anchor="w").grid(row=i,column=0,padx=5,pady=5)
+
+        var=tk.StringVar()
+        var.set(fixed_duty.get(task) or "随机")
+
+        vars[task]=var
+
+        options=["随机"]+duty_students
+
+        menu=tk.OptionMenu(win,var,*options)
+        menu.grid(row=i,column=1,padx=5,pady=5)
+
+    def save():
+
+        for t in tasks:
+
+            v=vars[t].get()
+
+            if v=="随机":
+                fixed_duty[t]=None
+            else:
+                fixed_duty[t]=v
+
+        save_fixed_duty()
+
+        messagebox.showinfo("成功","固定值日已保存")
+
+        win.destroy()
+
+    tk.Button(win,text="保存",command=save).grid(row=len(tasks),columnspan=2,pady=10)
+
+# ----------------------
+# 值日生成
 # ----------------------
 
 def get_today_duty():
 
     global duty_queue
 
-    if not duty_students:return []
+    result=[None]*5
+    used=set()
 
-    selected=[]
+    for i,task in enumerate(tasks):
 
-    while len(selected)<5:
+        person=fixed_duty.get(task)
 
-        if len(duty_queue)==0:
+        if person:
+            result[i]=person
+            used.add(person)
 
-            duty_queue=duty_students[:]
-            random.shuffle(duty_queue)
+    for i in range(5):
 
-        selected.append(duty_queue.pop(0))
+        if result[i] is None:
 
-    return selected
+            while True:
+
+                if len(duty_queue)==0:
+                    duty_queue=duty_students[:]
+                    random.shuffle(duty_queue)
+
+                s=duty_queue.pop(0)
+
+                if s not in used:
+                    result[i]=s
+                    used.add(s)
+                    break
+
+    return result
+
+# ----------------------
+# 显示值日
+# ----------------------
 
 def show_duty_window():
 
     today=get_today_duty()
-
-    if not today:
-        messagebox.showwarning("提示","请先导入值日名单")
-        return
 
     roles=["甲","乙","丙","丁","戊"]
 
@@ -288,10 +369,6 @@ def show_duty_window():
 # ----------------------
 
 def weekly_duty():
-
-    if not duty_students:
-        messagebox.showwarning("提示","请先导入值日名单")
-        return
 
     text=""
 
@@ -387,7 +464,7 @@ def save_pdf(today):
     pdf.output("Duty_"+datetime.now().strftime("%Y%m%d")+".pdf")
 
 # ----------------------
-# 自动值日时间
+# 自动时间
 # ----------------------
 
 def duty_timer():
@@ -442,6 +519,7 @@ root.geometry("860x580")
 load_saved_seat_names()
 load_saved_duty_names()
 load_seat_layout()
+load_fixed_duty()
 
 if len(sys.argv)>1 and sys.argv[1]=="--startup":
     root.withdraw()
@@ -456,9 +534,9 @@ tk.Button(top,text="锁定座位",command=lock_seat).grid(row=0,column=2,padx=5)
 
 tk.Button(top,text="导入值日名单",command=load_duty_excel).grid(row=0,column=3,padx=5)
 tk.Button(top,text="生成今日值日",command=show_duty_window).grid(row=0,column=4,padx=5)
-
 tk.Button(top,text="一周值日表",command=weekly_duty).grid(row=0,column=5,padx=5)
 tk.Button(top,text="值日统计",command=duty_stats).grid(row=0,column=6,padx=5)
+tk.Button(top,text="固定值日设置",command=set_fixed_duty).grid(row=0,column=7,padx=5)
 
 canvas=tk.Canvas(root,width=800,height=420)
 canvas.pack()
